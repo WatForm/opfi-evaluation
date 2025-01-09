@@ -3,3 +3,4 @@ all-ufnia-files.txt
 sample-benchmark.txt
 test-*.csv
 *-log.txt
+__pycache__/
