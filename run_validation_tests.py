@@ -9,7 +9,7 @@ import os
 import logging
 import shutil
 
-
+from pathlib import Path
 from testrunner import testrunner as tr
 from testrunner import util 
 import argparse
@@ -25,46 +25,69 @@ result_fields = ['return_code', 'time_elapsed', 'sat', 'unbound_valid']
 # Options to ignore in output
 ignore_fields = []
 
-def result_values(opts: tr.OptionDict, result: subprocess.CompletedProcess[str],
-                  time_elapsed: float) -> tr.OptionDict:
-    if result.returncode != 0:
-        logging.error('------OUTPUT------\n' + result.stdout + '------STDERR-----\n' + result.stderr +"------------")
-        satisfiability = 'UNSURE'
-        unbound_valid = 'NA'
-    else:   
-        satisfiability: str = 'UNSURE'
-        
-        result_str: str = result.stdout
-        
-        satisfiability = util.satisfiability_of_output(result_str)
-        
-        if satisfiability == util.Satisfiablity.SAT:
-            
-            # Trim to get constraints 
-            constraints_text = result_str.split('====Constraints====')[1].split('==End Constraints==')[0]
-            
-            validity = is_valid_solution(opts['target_file'], constraints_text)
-            
-            if validity is None:
-                unbound_valid = 'UNSURE'
-            elif validity == True:
-                unbound_valid = 'VALID'
-            else:
-                unbound_valid = 'INVALID'
-        else:
-            unbound_valid = 'NA'
-            
-            if satisfiability == util.Satisfiablity.UNSURE:
-                logging.error('------OUTPUT------\n' + result.stdout + '------STDERR-----\n' + result.stderr +"------------")
+# Result values needs some run-time info to save solutions to a file
+def make_result_values(save_dir: Path) -> Callable[[tr.OptionDict, subprocess.CompletedProcess[str], float], tr.OptionDict]:
+    """Result values needs to save the solution generated.
+    This function creates result_values when given a directory to save solutions in."""
+    # Ensure save dir exists and is empty
+    os.makedirs(save_dir)
     
-    results = {
-        'sat': satisfiability,
-        'return_code': result.returncode,
-        'time_elapsed': time_elapsed,
-        'unbound_valid': unbound_valid,
-    }
-    logging.debug(f'Result: {satisfiability}')
-    return results
+    def save_solution(solution: str, target_file: str) -> None:
+        """Saves """
+        save_file_name = target_file
+        save_file_name.replace('/', '_')
+        save_file_name.replace('\\', '_')
+        
+        save_path = save_dir / save_file_name
+        with open(save_path, 'w') as f:
+            f.write(solution)
+        logging.debug('Wrote solution.')
+    
+    def result_values(opts: tr.OptionDict, result: subprocess.CompletedProcess[str],
+                  time_elapsed: float) -> tr.OptionDict:
+        if result.returncode != 0:
+            logging.error('------OUTPUT------\n' + result.stdout + '------STDERR-----\n' + result.stderr +"------------")
+            satisfiability = 'UNSURE'
+            unbound_valid = 'NA'
+        else:   
+            satisfiability: str = 'UNSURE'
+            
+            result_str: str = result.stdout
+            
+            satisfiability = util.satisfiability_of_output(result_str)
+            
+            if satisfiability == util.Satisfiablity.SAT:
+                
+                # Trim to get constraints 
+                constraints_text = result_str.split('====Constraints====')[1].split('==End Constraints==')[0]
+                
+                save_solution(constraints_text, opts['target_file'])
+                
+                validity = is_valid_solution(opts['target_file'], constraints_text)
+                
+                if validity is None:
+                    unbound_valid = 'UNSURE'
+                elif validity == True:
+                    unbound_valid = 'VALID'
+                else:
+                    unbound_valid = 'INVALID'
+            else:
+                unbound_valid = 'NA'
+                
+                if satisfiability == util.Satisfiablity.UNSURE:
+                    logging.error('------OUTPUT------\n' + result.stdout + '------STDERR-----\n' + result.stderr +"------------")
+        
+        results = {
+            'sat': satisfiability,
+            'return_code': result.returncode,
+            'time_elapsed': time_elapsed,
+            'unbound_valid': unbound_valid,
+        }
+        logging.debug(f'Result: {satisfiability}')
+        return results
+    
+    return result_values
+
 
 def timeout_values(opts: tr.OptionDict, result: subprocess.TimeoutExpired) -> tr.OptionDict:
     results = {
@@ -124,6 +147,13 @@ if __name__ == '__main__':
     )
     
     parser.add_argument(
+        '--solutions-dir', '-s',
+        type=Path,
+        default=f'./solutions/{util.now_string()}/',
+        help='Path to store solutions in.'
+    )
+    
+    parser.add_argument(
         '--verbose', '-v',
         action='store_true',
         help='Add verbose loging data',
@@ -166,6 +196,10 @@ if __name__ == '__main__':
         util.setup_logging_debug()
     else:
         util.setup_logging_default()
+        
+    # Make directory to store results
+    
+    result_values = make_result_values(args.solutions_dir)
     
     runner = tr.CSVTestRunner(
         command,
