@@ -4,3 +4,4 @@ sample-benchmark.txt
 test-*.csv
 *-log.txt
 __pycache__/
+solutions/
