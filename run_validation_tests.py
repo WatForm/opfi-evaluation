@@ -211,6 +211,7 @@ if __name__ == '__main__':
         compiler,
         scope,
         target_file,
+        output_file=args.output,
         timeout=args.timeout,
         result_fields=result_fields,
         fields_from_result=result_values,
