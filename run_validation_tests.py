@@ -45,6 +45,9 @@ def make_result_values(save_dir: Path) -> Callable[[tr.OptionDict, subprocess.Co
     
     def result_values(opts: tr.OptionDict, result: subprocess.CompletedProcess[str],
                   time_elapsed: float) -> tr.OptionDict:
+        logging.debug("Killing solvers")
+        util.kill_solvers()
+        
         if result.returncode != 0:
             logging.error('------OUTPUT------\n' + result.stdout + '------STDERR-----\n' + result.stderr +"------------")
             satisfiability = 'UNSURE'
@@ -90,6 +93,8 @@ def make_result_values(save_dir: Path) -> Callable[[tr.OptionDict, subprocess.Co
 
 
 def timeout_values(opts: tr.OptionDict, result: subprocess.TimeoutExpired) -> tr.OptionDict:
+    logging.debug("Killing solvers")
+    util.kill_solvers()
     results = {
         'sat': util.Satisfiablity.UNSURE,
         'return_code': 999,
